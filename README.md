@@ -3,10 +3,10 @@ This repo inspired by [MGN-pytorch](https://github.com/seathiefwang/MGN-pytorch.
 
 # TODO list
 
-[ ] test
-[ ] save model
-[ ] load model
-[ ] other
+[] test
+[] save model
+[] load model
+[] other
 
 # Dependencies
 
