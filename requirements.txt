@@ -1,0 +1,8 @@
+tensorflow>=2.2
+matplotlib
+argparse
+sklearn
+pillow
+numpy
+scipy
+tqdm
