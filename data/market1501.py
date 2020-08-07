@@ -8,6 +8,7 @@ class Market1501():
     def __init__(self, args, transform, dtype):
 
         self.transform = transform
+        self.dtype = dtype
 
         data_path = args.datadir
         if dtype == 'train':
@@ -56,7 +57,10 @@ class Market1501():
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        if self.dtype == 'train':
+            return len(self.sampled_imgs)
+        else:
+            return len(self.imgs)
 
     def randomsampler(self, batch_id, batch_image):
         self.batch_image = batch_image

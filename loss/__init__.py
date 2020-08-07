@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from importlib import import_module
+from collections import OrderedDict
 
 import matplotlib
 matplotlib.use('Agg')
@@ -20,7 +21,7 @@ class MGNLoss(keras.losses.Loss):
 
         self.nGPU = args.nGPU
         self.args = args
-        self.loss = []
+        self.loss = OrderedDict()
         self.loss_module = list()
         for loss in args.loss.split('+'):
             weight, loss_type = loss.split('*')
@@ -29,58 +30,54 @@ class MGNLoss(keras.losses.Loss):
             elif loss_type == 'Triplet':
                 loss_function = TripletLoss(args.margin)
 
-            self.loss.append({
+            self.loss[loss_type] = {
                 'type': loss_type,
                 'weight': float(weight),
                 'function': loss_function
-                })
+                }
             
-
         if len(self.loss) > 1:
-            self.loss.append({'type': 'Total', 'weight': 0, 'function': None})
+            self.loss['Total'] = {'type': 'Total', 'weight': 0, 'function': None}
 
-        for l in self.loss:
-            if l['function'] is not None:
-                print('{:.3f} * {}'.format(l['weight'], l['type']))
-                self.loss_module.append(l['function'])
-
-        # self.log = torch.Tensor()
-
-        # device = torch.device('cpu' if args.cpu else 'cuda')
-        # self.loss_module.to(device)
+        for l_type in self.loss.keys():
+            if self.loss[l_type]['function'] is not None:
+                print('{:.3f} * {}'.format(self.loss[l_type]['weight'], l_type))
+                self.loss_module.append(self.loss[l_type]['function'])
         
+        self.log = np.array([], np.float)
+
         if args.load != '': self.load(ckpt.dir, cpu=args.cpu)
         # if not args.cpu and args.nGPU > 1:
         #     self.loss_module = nn.DataParallel(self.loss_module, range(args.nGPU))
 
     def call(self, labels, outputs):
         losses = []
-        for i, l in enumerate(self.loss):
-            if self.args.model == 'MGN' and l['type'] == 'Triplet':
-                loss = [l['function'](labels, output) for output in outputs[1:4]]
+        for i, loss_type in enumerate(self.loss.keys()):
+            if self.args.model == 'MGN' and loss_type == 'Triplet':
+                loss = [self.loss[loss_type]['function'](labels, output) for output in outputs[1:4]]
                 loss = sum(loss) / len(loss)
-                effective_loss = l['weight'] * loss
+                effective_loss = self.loss[loss_type]['weight'] * loss
                 losses.append(effective_loss)
-                # self.log[-1, i] += effective_loss.item()
-            elif self.args.model == 'MGN' and l['function'] is not None:
-                loss = []
-                lf = l['function']
-                one_hot_labels = tf.keras.utils.to_categorical(labels, self.args.num_classes)
-                loss = [l['function'](one_hot_labels, output) for output in outputs[4:]]
+                self.log[-1, i] += effective_loss
+            elif self.args.model == 'MGN' and self.loss[loss_type]['function'] is not None:
+                # one_hot_labels = tf.keras.utils.to_categorical(labels, self.args.num_classes)
+                labels = tf.cast(labels, tf.int64)
+                one_hot_labels = tf.keras.backend.one_hot(labels, self.args.num_classes)
+                loss = [self.loss[loss_type]['function'](one_hot_labels, output) for output in outputs[4:]]
                 loss = sum(loss) / len(loss)
-                effective_loss = l['weight'] * loss
+                effective_loss = self.loss[loss_type]['weight'] * loss
                 losses.append(effective_loss)
-                # self.log[-1, i] += effective_loss.item()
+                self.log[-1, i] += effective_loss
             else:
                 pass
         loss_sum = sum(losses)
-        # if len(self.loss) > 1:
-        #     self.log[-1, -1] += loss_sum.item()
+        if len(self.loss) > 1:
+            self.log[-1, -1] += loss_sum
 
         return loss_sum
 
     def start_log(self):
-        self.log = torch.cat((self.log, torch.zeros(1, len(self.loss))))
+        self.log = np.zeros((1, len(self.loss)))
 
     def end_log(self, batches):
         self.log[-1].div_(batches)
@@ -88,8 +85,8 @@ class MGNLoss(keras.losses.Loss):
     def display_loss(self, batch):
         n_samples = batch + 1
         log = []
-        for l, c in zip(self.loss, self.log[-1]):
-            log.append('[{}: {:.4f}]'.format(l['type'], c / n_samples))
+        for loss_type, c in zip(self.loss.keys(), self.log[-1]):
+            log.append('[{}: {:.4f}]'.format(loss_type, c / n_samples))
 
         return ''.join(log)
 

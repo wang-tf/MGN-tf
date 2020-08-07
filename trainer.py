@@ -15,6 +15,7 @@ class Trainer():
     def __init__(self, args, model, loss, loader, ckpt):
         self.args = args
         self.train_loader = loader.train_loader
+        self.train_batch_num = len(loader.trainset) // (args.batchid * args.batchimage)
         self.test_loader = loader.test_loader
         self.query_loader = loader.query_loader
         self.testset = loader.testset
@@ -48,7 +49,9 @@ class Trainer():
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
         return total_loss
     
-    def train(self):
+    def train(self, epoch):
+        self.loss.start_log()
+
         if self.args.nGPU > 1:
             for batch, inputs in enumerate(self.distributed_train_loader):
                 print(f'batch: {batch}')
@@ -56,9 +59,9 @@ class Trainer():
                 print(f'total loss: {total_loss}')
         else:
             for batch, inputs in enumerate(self.train_loader):
-                print(f'batch: {batch}')
                 total_loss = self.train_step(inputs, self.model, self.loss, self.optimizer)
-                print(f'total loss: {total_loss}')
+                print('[INFO] [{}/{}] {}/{} {}'.format(epoch, self.args.epochs, batch+1, self.train_batch_num, self.loss.display_loss(batch)), end='\r')
+            print('\n')
 
     def distributed_train_step(self, dist_inputs, model, loss, optimizer):
         per_replica_losses = self.mirrored_strategy.run(self.train_step, args=(dist_inputs, model, loss, optimizer))

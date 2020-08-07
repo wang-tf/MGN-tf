@@ -18,9 +18,8 @@ model = model.Model(args, ckpt)
 loss = loss.MGNLoss(args, ckpt) if not args.test_only else None
 trainer = Trainer(args, model, loss, loader, ckpt)
 
-n = 0
-while True:
+for n in range(args.epochs):
   n += 1
-  trainer.train()
+  trainer.train(epoch=n)
   if args.test_every!=0 and n % args.test_every == 0:
     trainer.test()
